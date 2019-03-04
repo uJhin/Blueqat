@@ -1,9 +1,11 @@
 '''QUBO maker, or QUBO mapper a.k.a. Quma.
 '''
-from typing import List, Mapping, Tuple
-from numbers import Real
+from typing import List, Mapping, Tuple, Iterable, FrozenSet
 from functools import reduce
+import itertools
 import operator
+from collections import deque
+
 import blueqat.pauli
 
 class Quma:
@@ -11,12 +13,22 @@ class Quma:
         self.terms = terms
 
     @staticmethod
-    def num(val):
-        return Quma({frozenset(): val})
+    def zero():
+        return Quma({})
 
     @staticmethod
-    def var(n, coeff=1):
+    def num(val):
+        if val:
+            return Quma({frozenset(): val})
+        return Quma.zero()
+
+    @staticmethod
+    def var(n: int, coeff: float = 1):
         return Quma({frozenset((n,)): coeff})
+
+    @staticmethod
+    def term(ns: Iterable[int], coeff: float = 1):
+        return Quma({frozenset(ns): coeff})
 
     @staticmethod
     def __add_terms_inplace(lhs, rhs):
@@ -49,10 +61,14 @@ class Quma:
     def is_term(self) -> bool:
         return len(self.terms) == 1
 
+    def is_zero(self) -> bool:
+        return not self.terms
+
     def is_const(self) -> bool:
-        return len(self.terms) == 1 and frozenset() in self.terms
+        return self.is_zero() or len(self.terms) == 1 and frozenset() in self.terms
 
     def subs(self, key, value=None):
+        # This feature is unstable :(
         if isinstance(value, (int, float, Quma)):
             if isinstance(key, int):
                 key = frozenset((key,))
@@ -65,6 +81,9 @@ class Quma:
 
             d = {}
             for k, v in self.terms.items():
+                if isinstance(v, Quma):
+                    # TODO: Impl
+                    pass
                 if key <= k:
                     newkey = k - key
                     newval = v * value
@@ -168,7 +187,7 @@ class Quma:
     def is_quadratic(self) -> bool:
         return all(map(lambda k: len(k) <= 2, self.terms))
 
-    def qubo_matrix(self) -> List[List[Real]]:
+    def qubo_matrix(self) -> List[List[float]]:
         n = self.max_n() + 1
         mat = [[0.] * n for _ in range(n)]
         for k, v in self.terms.items():
@@ -196,6 +215,55 @@ class Quma:
         mapping = {q: i  for i, q in enumerate(sorted(self.qubits())) if i != q}
         expr = self.subs(mapping)
         return expr, mapping
+
+    def __eq__(self, other):
+        if not isinstance(other, Quma):
+            return self.is_const() and sum(self.terms.values()) == other
+        if len(self.terms) != len(other.terms):
+            return False
+        try:
+            rterms = other.terms
+            return all(rterms[term] == val for term, val in self.terms.items())
+        except KeyError:
+            return False
+
+    def __ne__(self, other):
+        return not self == other
+
+    def make_quadratic_mapping(self) -> Tuple['Quma', 'Quma', Mapping[FrozenSet, int]]:
+        unused_qubits = itertools.count(self.max_n() + 1)
+        mapping = {}
+        newterms = {}
+        constraints = {}
+        for term, val in self.terms.items():
+            if len(term) <= 2:
+                newterms[term] = val
+                continue
+            q = deque(sorted(term))
+            while len(q) > 2:
+                q1 = q.popleft()
+                q2 = q.popleft()
+                if (q1, q2) in mapping:
+                    q12 = mapping[q1, q2]
+                else:
+                    q12 = mapping[q1, q2] = next(unused_qubits)
+                q.append(q12)
+            quad = frozenset(q)
+            assert quad not in newterms
+            newterms[quad] = val
+            constraints[frozenset({q12})] = 3
+            constraints[frozenset({q1, q2})] = 1
+            constraints[frozenset({q1, q12})] = -2
+            constraints[frozenset({q2, q12})] = -2
+        return Quma(newterms), Quma(constraints), mapping
+
+    def to_quadratic(self, constraints_ratio=None):
+        if constraints_ratio is None:
+            constraints_ratio = 1.0
+        expr, constraints, _mapping = self.make_quadratic_mapping()
+        return expr + constraints_ratio * constraints
+
+
 
 def parse(s: str) -> Quma:
     pass
