@@ -71,15 +71,23 @@ class BinaryBackend(Backend):
         if disp:
             inlabel = [s or ' ' for s in ctx.ilabels]
             outlabel = [s or ' ' for s in ctx.olabels]
-            label = ' '.join(inlabel) + ' | '  + ' '.join(outlabel)
+            if inlabel:
+                label = ' '.join(inlabel) + ' | '  + ' '.join(outlabel)
+            else:
+                label = ' '.join(outlabel)
             print(label)
-            print('-' * len(label))
+            if inlabel:
+                print('-' * len(label))
             fmt = ''
-            for s in inlabel:
-                fmt += ' ' * (len(s) - 1) + '{} '
-            fmt += '|'
-            for s in outlabel:
-                fmt += ' ' * (len(s) - 1) + ' {}'
+            if inlabel:
+                for s in inlabel:
+                    fmt += ' ' * (len(s) - 1) + '{} '
+                    fmt += '|'
+                for s in outlabel:
+                    fmt += ' ' * (len(s) - 1) + ' {}'
+            else:
+                for s in outlabel:
+                    fmt += ' ' * (len(s) - 1) + '{} '
         results = []
         for bits in product((0, 1), repeat=len(inputs)):
             mem = [0] * n_bits
@@ -92,6 +100,7 @@ class BinaryBackend(Backend):
             results.append((bits, outs))
             if disp:
                 print(fmt.format(*bits, *outs))
+        print()
         return results
 
     def gate_x(self, gate, ctx):
