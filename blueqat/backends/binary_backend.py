@@ -100,7 +100,8 @@ class BinaryBackend(Backend):
             results.append((bits, outs))
             if disp:
                 print(fmt.format(*bits, *outs))
-        print()
+        if disp:
+            print()
         return results
 
     def gate_x(self, gate, ctx):
