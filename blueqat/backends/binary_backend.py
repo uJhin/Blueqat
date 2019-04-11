@@ -82,7 +82,7 @@ class BinaryBackend(Backend):
             if inlabel:
                 for s in inlabel:
                     fmt += ' ' * (len(s) - 1) + '{} '
-                    fmt += '|'
+                fmt += '|'
                 for s in outlabel:
                     fmt += ' ' * (len(s) - 1) + ' {}'
             else:
