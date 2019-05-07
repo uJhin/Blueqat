@@ -264,7 +264,7 @@ class QasmRealConst(QasmRealExpr):
 
 
 
-class QasmGateDef(QasmNode):
+class QasmGateDecl(QasmNode):
     pass
 
 
@@ -434,20 +434,20 @@ def _parse_statements(tokens,
                     _err_with_lineno(lineno, f'During reading file {incfile}, Error occured. {e}')
         elif tok in ('gate', 'opaque'):
             if tok == 'gate':
-                gate = _parse_def_gate(tokens)
+                gate = _parse_gate_decl(tokens, gates)
             else:
                 gate = _parse_opaque(tokens)
             if gate in gates:
                 _err_with_lineno(lineno, f'Gate {gate} is already defined.')
             gates[gate] = gate
-        elif tok == 'barrier':
-            stmts.append(_parse_barrier_stmt(tokens, qregs))
         elif tok == 'if':
             stmts.append(_parse_if_stmt(tokens, gates, qregs, cregs))
         elif tok == 'reset':
             stmts.append(_parse_reset_stmt(tokens, qregs))
         elif tok == 'measure':
             stmts.append(_parse_measure_stmt(tokens, qregs, cregs))
+        elif tok == 'barrier':
+            stmts.append(_parse_barrier_stmt(tokens, qregs))
         elif tok in gates:
             stmts.append(_parse_apply_gate(tokens, gates[tok], qregs))
         else:
@@ -560,14 +560,33 @@ def _parse_measure_stmt(tokens, qregs, cregs):
     return QasmMeasure(q, c)
 
 
-def _parse_def_gate(tokens):
+def _parse_gate_decl(tokens, gates):
     name = tokens.get_if(_is_symbol, 'After "gate", name is expected.')
     params = _parse_params(tokens, allow_no_params=True, allow_empty=False)
     qparams = _parse_qparams(tokens)
     tokens.get_if('{', '`{` is expected for gate definition.')
-    # TODO: Impl.
+    stmts = _parse_gop_list(tokens, qparams, params, gates)
     tokens.get_if('}', 'Corresponed paren `}` is required.')
     return QasmGateDef()
+
+
+def _parse_gop_list(tokens,
+                    qparams: List[str],
+                    params: List[str],
+                    gates: Dict[str, QasmAbstractGate]):
+    stmts = []
+    lineno, tok = tokens.get()
+    while tok:
+        if tok == 'barrier':
+            stmts.append(_parse_barrier_stmt(tokens, qparams))
+        elif tok in gates:
+            stmts.append(_parse_apply_gate(tokens, gates[tok], qparams))
+        elif tok == '}':
+            return stmts
+        else:
+            print(f"?{lineno}: {tok}")
+        lineno, tok = tokens.get()
+    _err_with_lineno(lineno, 'Unexpected end of line')
 
 
 def _parse_opaque(tokens):
