@@ -264,10 +264,6 @@ class QasmRealConst(QasmRealExpr):
 
 
 
-class QasmGateDecl(QasmNode):
-    pass
-
-
 class QasmApplyGate(QasmNode):
     def __init__(self, gate, params, qregs):
         self.gate = gate
@@ -351,14 +347,13 @@ class QasmGate(QasmAbstractGate):
     def gatetype(cls):
         return QasmGateType.Gate
 
-    def __init__(self, gatedef: QasmGateDef):
-        self.gatedef = gatedef
-        name = ''; params = []; qargs = [] # TODO: Impl.
+    def __init__(self, name: str, params: List[str], qargs: List[str], stmts: List[QasmNode]):
+        self.stmts = stmts
         super().__init__(name, params, qargs)
 
 
     def __repr__(self) -> str:
-        return f'QasmGate({repr(self.gatedef)})'
+        return f"QasmGate('{self.name}', {self.params}, {self.qargs}, {repr(self.stmts)})"
 
 
 class QasmOpaque(QasmAbstractGate):
@@ -366,17 +361,11 @@ class QasmOpaque(QasmAbstractGate):
     def gatetype(cls):
         return QasmGateType.Opaque
 
-    def __repr__(self) -> str:
-        return f"QasmOpaque('{self.name}')"
-
 
 class QasmBuiltinGate(QasmAbstractGate):
     @classmethod
     def gatetype(cls):
         return QasmGateType.Builtin
-
-    def __repr__(self) -> str:
-        return f"QasmBuiltinGate('{self.name}')"
 
 
 def _get_matcher(regex: str) -> Callable[[str], Match]:
@@ -433,13 +422,14 @@ def _parse_statements(tokens,
                 except OSError as e:
                     _err_with_lineno(lineno, f'During reading file {incfile}, Error occured. {e}')
         elif tok in ('gate', 'opaque'):
+            print('gate/opaque')
             if tok == 'gate':
                 gate = _parse_gate_decl(tokens, gates)
             else:
                 gate = _parse_opaque(tokens)
-            if gate in gates:
+            if gate.name in gates:
                 _err_with_lineno(lineno, f'Gate {gate} is already defined.')
-            gates[gate] = gate
+            gates[gate.name] = gate
         elif tok == 'if':
             stmts.append(_parse_if_stmt(tokens, gates, qregs, cregs))
         elif tok == 'reset':
@@ -503,8 +493,8 @@ def _parse_params(tokens,
     return params
 
 
-def _parse_qparams(tokens):
-    params = _parse_idlist(tokens, ';')
+def _parse_qparams(tokens, endtoken: str = ';'):
+    params = _parse_idlist(tokens, endtoken)
     if not params:
         _err_with_lineno(tokens.lineno, 'Empty parameter is not allowed.')
     return params
@@ -561,13 +551,12 @@ def _parse_measure_stmt(tokens, qregs, cregs):
 
 
 def _parse_gate_decl(tokens, gates):
-    name = tokens.get_if(_is_symbol, 'After "gate", name is expected.')
+    lineno, name = tokens.get_if(_is_symbol, 'After "gate", name is expected.')
     params = _parse_params(tokens, allow_no_params=True, allow_empty=False)
-    qparams = _parse_qparams(tokens)
-    tokens.get_if('{', '`{` is expected for gate definition.')
+    qparams = _parse_qparams(tokens, '{')
     stmts = _parse_gop_list(tokens, qparams, params, gates)
-    tokens.get_if('}', 'Corresponed paren `}` is required.')
-    return QasmGateDef()
+    print(stmts)
+    return QasmGate(name, params, qparams, stmts)
 
 
 def _parse_gop_list(tokens,
@@ -590,7 +579,7 @@ def _parse_gop_list(tokens,
 
 
 def _parse_opaque(tokens):
-    name = tokens.get_if(_is_symbol, 'After "opaque", name is expected.')
+    lineno, name = tokens.get_if(_is_symbol, 'After "opaque", name is expected.')
     params = _parse_params(tokens, allow_no_params=True, allow_empty=False)
     qparams = _parse_qparams(tokens)
     tokens.assert_semicolon()
@@ -827,12 +816,15 @@ if __name__ == '__main__':
 // quantum Fourier transform
 OPENQASM 2.0;
 include "qelib1.inc";
+gate h_ q {
+    h q;
+}
 qreg q[4];
 creg c[4];
 x q[0];
 x q[2];
 barrier q;
-h q[0];
+h_ q[0];
 cu1(pi/2) q[1],q[0];
 h q[1];
 cu1(pi/4) q[2],q[0];
@@ -845,10 +837,9 @@ h q[3];
 measure q -> c;'''
 
     #print(list(split_tokens(qftstr)))
-    qp = parse_qasm('OPENQASM 2.0;\ninclude "qelib1.inc";\nqreg q[4];\ncreg c[4];\nu1(sin(0 + cos(1 * pi - pi)) + 0.5 * pi / 2 - 0.5 * (pi - 0)) q[0];')
-    print(qp)
-    print(output_qasm(qp))
-    exit()
+    #qp = parse_qasm('OPENQASM 2.0;\ninclude "qelib1.inc";\nqreg q[4];\ncreg c[4];\nu1(sin(0 + cos(1 * pi - pi)) + 0.5 * pi / 2 - 0.5 * (pi - 0)) q[0];')
+    #print(qp)
+    #print(output_qasm(qp))
     qp = parse_qasm(qftstr)
     print(qp)
     qasm = output_qasm(qp)
