@@ -2,46 +2,7 @@ from typing import Tuple, NamedTuple
 from functools import partial
 from .. import gate
 from .. import Circuit
-
-GATE_SET = {
-    "i": gate.IGate,
-    "x": gate.XGate,
-    "y": gate.YGate,
-    "z": gate.ZGate,
-    "h": gate.HGate,
-    "t": gate.TGate,
-    "tdg": gate.TDagGate,
-    "s": gate.SGate,
-    "sdg": gate.SDagGate,
-    "cz": gate.CZGate,
-    "cx": gate.CXGate,
-    "cnot": gate.CXGate,
-    "cy": gate.CYGate,
-    "ch": gate.CHGate,
-    "rx": gate.RXGate,
-    "ry": gate.RYGate,
-    "rz": gate.RZGate,
-    "r": gate.PhaseGate,
-    "phase": gate.PhaseGate,
-    "crx": gate.CRXGate,
-    "cry": gate.CRYGate,
-    "crz": gate.CRZGate,
-    "cr": gate.CPhaseGate,
-    "cphase": gate.CPhaseGate,
-    "u1": gate.U1Gate,
-    "u2": gate.U2Gate,
-    "u3": gate.U3Gate,
-    "cu1": gate.CU1Gate,
-    "cu2": gate.CU2Gate,
-    "cu3": gate.CU3Gate,
-    "swap": gate.SwapGate,
-    "ccx": gate.ToffoliGate,
-    "toffoli": gate.ToffoliGate,
-    "measure": gate.Measurement,
-    "m": gate.Measurement,
-}
-
-GLOBAL_MACROS = {}
+from ..circuit import GATE_SET, GLOBAL_MACROS
 
 class Ops(NamedTuple):
     """Immutable type operations"""
@@ -55,6 +16,9 @@ class Ops(NamedTuple):
         if name in GATE_SET:
             return _GateWrapper(self, name, GATE_SET[name])
         if name in GLOBAL_MACROS:
+            macro = GLOBAL_MACROS[name]
+            if isinstance(macro, MacroWrapper):
+                return macro(self)
             return partial(GLOBAL_MACROS[name], self)
         raise AttributeError(f"'circuit' object has no attribute or gate '{name}'")
 
@@ -69,6 +33,10 @@ class Ops(NamedTuple):
 
     def to_circuit(self):
         return Circuit(self.n_qubits, list(self.ops))
+
+
+class MacroWrapper:
+    pass
 
 
 class _GateWrapper:
