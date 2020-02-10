@@ -29,7 +29,7 @@ def get_measurement_sampler(n_sample):
     return sampling_by_measurement
 
 
-def get_statevector_sampler(n_sample):
+def get_statevector_counting_sampler(n_sample):
     """Returns a function which get the expectations by sampling the state vector"""
     def sampling_by_measurement(circuit, meas, *args, **kwargs):
         val = 0.0
@@ -41,4 +41,4 @@ def get_statevector_sampler(n_sample):
     return sampling_by_measurement
 
 # Overwrite
-get_state_vector_sampler = get_statevector_sampler
+get_state_vector_sampler = get_statevector_counting_sampler
