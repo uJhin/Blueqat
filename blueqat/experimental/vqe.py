@@ -76,7 +76,65 @@ class AnsatzBase:
         """Get an objective function to be optimized."""
         return Objective(self, sampler)
 
-class QaoaAnsatz(AnsatzBase):
+
+class HamiltonanGroupingAnsatz(AnsatzBase):
+    def __init__(self, hamiltonian, n_params, grouping_strategy=None):
+        super().__init__(hamiltonian, n_params)
+        if grouping_strategy is None:
+            grouping_strategy = grouping_hamiltonian
+        self.grouped_hamiltonian = grouping_strategy(hamiltonian)
+        self.x_list = []
+        self.y_list = []
+        self.m_list = []
+        n_qubits = self.n_qubits
+        for grp in self.grouped_hamiltonian:
+            meas = ['.'] * n_qubits
+            for term in grp:
+                for op in term.ops:
+                    if op.op == 'I':
+                        continue
+                    assert meas[op.n] == '.' or meas[op.n] == op.op
+                    meas[op.n] = op.op
+            self.x_list.append(tuple(n for n, m in enumerate(meas) if m == 'X'))
+            self.y_list.append(tuple(n for n, m in enumerate(meas) if m == 'Y'))
+            self.m_list.append(tuple(n for n, m in enumerate(meas) if m != '.'))
+
+        def term_mask(m_list, n_iter):
+            n = tuple(n_iter)
+            return tuple(int(m in n) for m in m_list)
+
+        self.grps = [[(term.coeff, term_mask(m_list, term.n_iter())) for term in grp]
+                     for m_list, grp in zip(self.m_list, self.grouped_hamiltonian)]
+#        print(f'''{hamiltonian=}
+#{self.grouped_hamiltonian=}
+#{self.x_list=}
+#{self.y_list=}
+#{self.m_list=}
+#{self.grps=}''')
+
+
+    def get_energy(self, circuit, sampler):
+        """Calculate energy from circuit and sampler."""
+        tuplemask = lambda t1, t2: tuple(e1 & e2 for e1, e2 in zip(t1, t2))
+        val = 0.0
+        for xs, ys, ms, grp in zip(self.x_list, self.y_list, self.m_list, self.grps):
+            c = circuit.copy()
+            c.h[xs].rx(-np.pi * 0.5)[ys]
+            measured = sampler(c, ms)
+            #print('measured:', measured)
+            for coeff, mask in grp:
+                #print('mask:', mask)
+                for bits, prob in measured.items():
+                    #print('bits:', bits)
+                    #print('---->', tuplemask(mask, bits))
+                    if sum(tuplemask(mask, bits)) % 2:
+                        val -= prob * coeff
+                    else:
+                        val += prob * coeff
+        return val.real
+
+
+class QaoaAnsatz(HamiltonanGroupingAnsatz):
     def __init__(self, hamiltonian, step=1, init_circuit=None):
         super().__init__(hamiltonian, step * 2)
         self.hamiltonian = hamiltonian.to_expr().simplify()
@@ -189,12 +247,15 @@ def expect(qubits, meas):
     mask = reduce(lambda acc, v: acc | (1 << v), meas, 0)
 
     cnt = defaultdict(float)
-    for i, v in enumerate(qubits):
-        p = v.real ** 2 + v.imag ** 2
+    probs = qubits.real ** 2
+    probs += qubits.imag ** 2
+    for i, p in enumerate(probs):
         if p != 0.0:
             cnt[i & mask] += p
     return {to_key(k): v for k, v in cnt.items()}
 
+
+# TODO: Shall be change sampler specifications for grouping Hamiltonian.
 
 def statevector_sampler(circuit, meas, *args, **kwargs):
     """Calculate the expectations without sampling."""
@@ -236,3 +297,22 @@ def get_statevector_counting_sampler(n_sample):
     return sampling_by_measurement
 
 get_state_vector_sampler = get_statevector_counting_sampler
+
+# TODO: This function shall be moved to pauli lib. and shall be renamed.
+def trim_small_term(hamiltonian, small=1e-6):
+    cls = hamiltonian.__class__
+    return cls(tuple(term for term in hamiltonian if abs(term.coeff) > small))
+
+def grouping_hamiltonian(hamiltonian):
+    hamiltonian = trim_small_term(hamiltonian.to_expr())
+    groups = []
+    for i_term, term in enumerate(hamiltonian):
+        for i_grp, g in enumerate(reversed(groups)):
+            if all(map(term.is_commutable_with, g)):
+                #print(f'{i_term}\t{len(groups) - 1 - i_grp} appended')
+                g.append(term)
+                break
+        else:
+            groups.append([term])
+            #print(f'{i_term}\tnew group')
+    return groups
