@@ -88,11 +88,14 @@ class HamiltonianGroupingAnsatz(AnsatzBase):
         self.m_list = []
         n_qubits = self.n_qubits
         for grp in self.grouped_hamiltonian:
+            print(grp)
             meas = ['.'] * n_qubits
             for term in grp:
+                print(term)
                 for op in term.ops:
                     if op.op == 'I':
                         continue
+                    print(meas, op)
                     assert meas[op.n] == '.' or meas[op.n] == op.op
                     meas[op.n] = op.op
             self.x_list.append(tuple(n for n, m in enumerate(meas) if m == 'X'))
@@ -304,11 +307,12 @@ def trim_small_term(hamiltonian, small=1e-6):
     return cls(tuple(term for term in hamiltonian if abs(term.coeff) > small))
 
 def grouping_hamiltonian(hamiltonian):
+    from blueqat.pauli import is_commutable
     hamiltonian = trim_small_term(hamiltonian.to_expr())
     groups = []
     for i_term, term in enumerate(hamiltonian):
         for i_grp, g in enumerate(reversed(groups)):
-            if all(map(term.is_commutable_with, g)):
+            if all(map(lambda t: is_commutable(t, term, eps=1e-20), g)):
                 #print(f'{i_term}\t{len(groups) - 1 - i_grp} appended')
                 g.append(term)
                 break
