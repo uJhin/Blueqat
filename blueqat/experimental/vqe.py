@@ -77,7 +77,7 @@ class AnsatzBase:
         return Objective(self, sampler)
 
 
-class HamiltonanGroupingAnsatz(AnsatzBase):
+class HamiltonianGroupingAnsatz(AnsatzBase):
     def __init__(self, hamiltonian, n_params, grouping_strategy=None):
         super().__init__(hamiltonian, n_params)
         if grouping_strategy is None:
@@ -134,7 +134,7 @@ class HamiltonanGroupingAnsatz(AnsatzBase):
         return val.real
 
 
-class QaoaAnsatz(HamiltonanGroupingAnsatz):
+class QaoaAnsatz(HamiltonianGroupingAnsatz):
     def __init__(self, hamiltonian, step=1, init_circuit=None):
         super().__init__(hamiltonian, step * 2)
         self.hamiltonian = hamiltonian.to_expr().simplify()
