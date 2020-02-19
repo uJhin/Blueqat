@@ -88,14 +88,14 @@ class HamiltonianGroupingAnsatz(AnsatzBase):
         self.m_list = []
         n_qubits = self.n_qubits
         for grp in self.grouped_hamiltonian:
-            print(grp)
+            #print(grp)
             meas = ['.'] * n_qubits
             for term in grp:
-                print(term)
+                #print(term)
                 for op in term.ops:
                     if op.op == 'I':
                         continue
-                    print(meas, op)
+                    #print(meas, op)
                     assert meas[op.n] == '.' or meas[op.n] == op.op
                     meas[op.n] = op.op
             self.x_list.append(tuple(n for n, m in enumerate(meas) if m == 'X'))
@@ -306,17 +306,47 @@ def trim_small_term(hamiltonian, small=1e-6):
     cls = hamiltonian.__class__
     return cls(tuple(term for term in hamiltonian if abs(term.coeff) > small))
 
+# TODO: This function shall be moved to pauli lib. and shall be renamed.
+def paulistr(term, n_qubits=0):
+    term = term.simplify()
+    try:
+        n_qubits = max(n_qubits, term.max_n() + 1)
+    except:
+        pass
+    s = ['I'] * n_qubits
+    for op in term.ops:
+        if op.op != 'I':
+            s[op.n] = op.op
+    return ''.join(s)
+
 def grouping_hamiltonian(hamiltonian):
     from blueqat.pauli import is_commutable
     hamiltonian = trim_small_term(hamiltonian.to_expr())
+    try:
+        n_qubits = hamiltonian.max_n() + 1
+    except:
+        n_qubits = 0
+
+    def paulistr_merged(group, term):
+        try:
+            return ''.join(g if t == 'I' else t if g in ('I', t) else None for g, t in zip(group, term))
+        except TypeError:
+            return None
     groups = []
-    for i_term, term in enumerate(hamiltonian):
-        for i_grp, g in enumerate(reversed(groups)):
-            if all(map(lambda t: is_commutable(t, term, eps=1e-20), g)):
-                #print(f'{i_term}\t{len(groups) - 1 - i_grp} appended')
+    maps = []
+    for term in hamiltonian:
+        term_pstr = list(paulistr(term, n_qubits))
+        #print(term_pstr, 'term')
+        for g, m in zip(groups, maps):
+            newmap = paulistr_merged(m, term_pstr)
+            #print(m)
+            if newmap is not None:
+                #print('merge')
                 g.append(term)
+                m[:] = newmap
                 break
         else:
+            #print('new')
             groups.append([term])
-            #print(f'{i_term}\tnew group')
+            maps.append(term_pstr)
     return groups
