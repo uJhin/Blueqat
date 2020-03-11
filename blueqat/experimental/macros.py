@@ -1,4 +1,6 @@
-from blueqat import BlueqatGlobalSetting
+from functools import partial
+
+from blueqat import Circuit, BlueqatGlobalSetting
 from blueqat.pauli import term_from_chars
 
 from .utils import def_macro, targetable
@@ -45,3 +47,37 @@ def iqft(c, target):
 @def_macro
 def macros(_):
     print(GLOBAL_MACROS)
+
+
+def _expand_ops(ops, n_qubits):
+    # TODO: Implement
+    return ops
+
+def _extend_circuit_macro():
+    def wrap_init(f):
+        def wrapper(self, *args, **kwargs):
+            if 'macros' in kwargs:
+                self.macros = kwargs['macros']
+                del kwargs['macros']
+            f(self, *args, **kwargs)
+        return wrapper
+    Circuit.__init__ = wrap_init(Circuit.__init__)
+    def wrap_getattr(f):
+        def wrapper(self, name):
+            if name in self.macros:
+                return partial(self.macros[name], self)
+            return f(self, name)
+        return wrapper
+    Circuit.__getattr__ = wrap_getattr(Circuit.__getattr__)
+    def wrap_run(f):
+        def wrapper(self, *args, **kwargs):
+            ops = self.ops
+            self.ops = _expand_ops(self.ops, self.n_qubits)
+            try:
+                f(self, *args, **kwargs)
+            finally:
+                self.ops = ops
+        return wrapper
+    Circuit.run = wrap_run(Circuit.run)
+
+_extend_circuit_macro()
