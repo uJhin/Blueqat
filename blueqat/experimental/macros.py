@@ -2,6 +2,7 @@ from functools import partial
 
 from blueqat import Circuit, BlueqatGlobalSetting
 from blueqat.pauli import term_from_chars
+from blueqat.circuit import DEFAULT_BACKEND_NAME
 
 from .utils import def_macro, targetable
 from .operations import GLOBAL_MACROS
@@ -59,6 +60,8 @@ def _extend_circuit_macro():
             if 'macros' in kwargs:
                 self.macros = kwargs['macros']
                 del kwargs['macros']
+            else:
+                self.macros = {}
             f(self, *args, **kwargs)
         return wrapper
     Circuit.__init__ = wrap_init(Circuit.__init__)
@@ -69,15 +72,15 @@ def _extend_circuit_macro():
             return f(self, name)
         return wrapper
     Circuit.__getattr__ = wrap_getattr(Circuit.__getattr__)
-    def wrap_run(f):
-        def wrapper(self, *args, **kwargs):
-            ops = self.ops
-            self.ops = _expand_ops(self.ops, self.n_qubits)
-            try:
-                f(self, *args, **kwargs)
-            finally:
-                self.ops = ops
-        return wrapper
-    Circuit.run = wrap_run(Circuit.run)
+    def new_run(self, *args, backend=None, **kwargs):
+        if backend is None:
+            if self._default_backend is None:
+                backend = self._Circuit__get_backend(DEFAULT_BACKEND_NAME)
+            else:
+                backend = self._Circuit__get_backend(self._default_backend)
+        elif isinstance(backend, str):
+            backend = self._Circuit_get_backend(backend)
+        return backend.run(_expand_ops(self.ops, self.n_qubits), self.n_qubits, *args, **kwargs)
+    Circuit.run = new_run
 
 _extend_circuit_macro()
