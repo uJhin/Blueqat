@@ -41,27 +41,75 @@ def circuit_to_unitary(circ: Circuit, *runargs, **runkwargs):
     return np.array(vecs).T
 
 
-def def_macro(func, name: Optional[str] = None, allow_overwrite: bool = False):
-    """Decorator for define and register a macro"""
-    if name is None:
-        if isinstance(func, str):
-            # Decorator with arguments
-            name = func
-            def _wrapper(func):
-                BlueqatGlobalSetting.register_macro(name, func, allow_overwrite)
-                return func
-            return _wrapper
-        if callable(func):
-            # Direct call or decorator without arguments
-            name = func.__name__
-            if not name.isidentifier() or iskeyword(name):
-                raise ValueError('Invalid function name')
-            BlueqatGlobalSetting.register_macro(name, func, allow_overwrite)
-            return func
-    if isinstance(name, str) and callable(func):
+def def_macro(func: Optional[Union[Callable[[Any], Any], str]] = None, *, allow_overwrite: bool = False):
+    """@def_macro decorator.
+
+    Typical usage:
+
+    Case 1: no arguments
+
+        @def_macro
+        def ham(c):
+            ...
+
+    equivalent to this:
+
+        def ham(c):
+            ...
+        BlueqatGlobalSetting.register_macro('ham', ham)
+
+
+    Case 2: with name:
+
+        @def_macro('egg')
+        def ham(c):
+            ...
+
+    is equivalent with
+
+        def ham(c):
+            ...
+        BlueqatGlobalSetting.register_macro('egg', ham)
+
+    Case 3: with allow_overwrite keyword argument
+
+        @def_macro(allow_overwrite=True)
+        def ham(c):
+            ...
+
+    or
+
+        @def_macro('egg', allow_overwrite=True)
+        def ham(c):
+            ...
+
+    call BlueqatGlobalSetting.register_macro with allow_overwrite=True.
+    """
+    if callable(func):
+        # @def_macro pattern.
+        name = func.__name__
+        if not name.isidentifier() or iskeyword(name):
+            raise ValueError(f'Function name {name} is not a valid macro name. ')
         BlueqatGlobalSetting.register_macro(name, func)
         return func
-    raise ValueError('Invalid argument')
+    if isinstance(func, str):
+        # @def_macro(name) or @def_macro(name, allow_overwrite) pattern.
+        name = func
+        def _wrapper(func):
+            BlueqatGlobalSetting.register_macro(name, func, allow_overwrite)
+            return func
+        return _wrapper
+    if func is None:
+        # @def_macro(allow_overwrite) pattern.
+        def _wrapper(func):
+            name = func.__name__
+            if not name.isidentifier() or iskeyword(name):
+                raise ValueError(f'Function name {name} is not a valid macro name. ')
+            BlueqatGlobalSetting.register_macro(name, func, allow_overwrite)
+            return func
+        return _wrapper
+    raise TypeError('Invalid type for first argument.')
+
 
 
 def targetable(func, call='never'):
