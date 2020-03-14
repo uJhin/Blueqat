@@ -41,7 +41,7 @@ def circuit_to_unitary(circ: Circuit, *runargs, **runkwargs):
     return np.array(vecs).T
 
 
-def def_macro(func, name: str = None, allow_overwrite: bool = False):
+def def_macro(func, name: Optional[str] = None, allow_overwrite: bool = False):
     """Decorator for define and register a macro"""
     if name is None:
         if isinstance(func, str):
