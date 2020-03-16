@@ -39,7 +39,7 @@ class Gate(ABC):
         """Returns printable string of args."""
         if not self.params:
             return ''
-        return '(' + ', '.join(str(param) for param in self.params) + ')'
+        return '(' + ', '.join(repr(param) for param in self.params) + ')'
 
     def _str_targets(self) -> str:
         """Returns printable string of targets."""
@@ -513,6 +513,7 @@ class CU2Gate(TwoQubitGate):
         return self._make_fallback_for_control_target_iter(
             n_qubits, lambda c, t: [CU3Gate((c, t), math.pi / 2, self.phi, self.lambd)])
 
+
 class CU3Gate(TwoQubitGate):
     """Controlled U3 gate"""
     lowername = "cu3"
@@ -535,6 +536,29 @@ class CU3Gate(TwoQubitGate):
                 CXGate((c, t)),
                 U3Gate(t, self.theta / 2, self.phi, 0),
             ])
+
+
+class BackendSpecificGate(Gate):
+    """Gate for backend dependent operations."""
+    lowername = "sp"
+
+    def __init__(self, targets, name, *args, **kwargs):
+        super().__init__(targets, (name,) + args, **kwargs)
+        if name.endswith('?'):
+            self.must_use = False
+            self.name = name[:-1]
+        else:
+            self.must_use = True
+            self.name = name
+
+    def dagger(self):
+        return self
+
+    def fallback(self, n_qubits):
+        if self.must_use:
+            raise ValueError(f'Backend specific gate of "{self.name}" '
+                             'is not implemented in this backend.')
+        return []
 
 
 class Measurement(OneQubitGate):
