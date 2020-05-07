@@ -255,7 +255,7 @@ class _PauliImpl:
         krons.append(mat)
         if n_qubits > _n(self) + 1:
             krons.append(eye(2 ** (n_qubits - _n(self) - 1)))
-        return reduce(kron, krons)
+        return reduce(kron, reversed(krons))
 
 class _X(_PauliImpl, _PauliTuple):
     """Pauli's X operator"""
@@ -561,7 +561,7 @@ class Term(_TermTuple):
             n_last = op.n
         if n_qubits - 1 > n_last:
             krons.append(eye(2 ** (n_qubits - 1 - n_last)))
-        return reduce(kron, krons)
+        return self.coeff * reduce(kron, reversed(krons))
 
 
 _ExprTuple = namedtuple("_ExprTuple", "terms")
