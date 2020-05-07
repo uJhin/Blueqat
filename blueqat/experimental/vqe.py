@@ -350,3 +350,19 @@ def grouping_hamiltonian(hamiltonian):
             groups.append([term])
             maps.append(term_pstr)
     return groups
+
+
+def sparse_expectation(mat, vec):
+    return np.vdot(vec, mat.dot(vec)).real
+
+class SparseExpectationAnsatz(AnsatzBase):
+    def __init__(self, hamiltonian, n_params, format=None):
+        super().__init__(hamiltonian, n_params)
+        if format is None:
+            format = 'csc'
+        self.sparse = hamiltonian.to_matrix(sparse=format)
+
+
+    def get_energy(self, circuit, sampler):
+        """Calculate energy from circuit and sampler."""
+        return sparse_expectation(self.sparse, circuit.run())
